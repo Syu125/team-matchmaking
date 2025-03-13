@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import cdist
+from sentence_transformers import SentenceTransformer
 
 def preprocess_data(file_path):
     df = pd.read_csv(file_path)
@@ -14,26 +15,12 @@ def encode_answers(df):
     if not text_columns:
         raise KeyError("None of the expected text columns are present in the dataset.")
     
-    # Create a basic numerical encoding for text responses
-    word_to_index = {}
-    encoded_texts = []
-    
-    for text in df[text_columns].astype(str).agg(' '.join, axis=1):
-        encoded_vector = []
-        words = text.split()
-        for word in words:
-            if word not in word_to_index:
-                word_to_index[word] = len(word_to_index) + 1  # Assign unique index
-            encoded_vector.append(word_to_index[word])
-        encoded_texts.append(encoded_vector)
-    
-    # Pad/truncate vectors to a fixed length
-    max_length = max(len(vec) for vec in encoded_texts)
-    encoded_matrix = np.zeros((len(encoded_texts), max_length))
-    for i, vec in enumerate(encoded_texts):
-        encoded_matrix[i, :len(vec)] = vec[:max_length]
-    
-    return encoded_matrix
+    # Hugging Face's BGE model
+    model = SentenceTransformer("BAAI/bge-base-en")  
+    encoded_texts = model.encode(df[text_columns].astype(str).agg(' '.join, axis=1).tolist(), 
+                                 normalize_embeddings=True)
+
+    return np.array(encoded_texts)
 
 def cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4):
     num_clusters = len(df) // min_group_size  # Ensure enough clusters for min size

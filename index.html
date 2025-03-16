@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Processor with Python</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+</head>
+<body>
+  <h1>CSE 156 Team Matchmaking</h1>
+  <p>Select a CSV file to process:</p>
+  <input type="file" id="csvInput" accept=".csv">
+  <button id="processButton">Process CSV</button>
+  <br><br>
+  <a id="downloadLink" style="display:none;">Download Processed CSV</a>
+
+  <script>
+    let pyodideReadyPromise = loadPyodide();
+
+    async function runMatchmaking(csvData) {
+      const pyodide = await pyodideReadyPromise;
+
+      pyodide.FS.writeFile('input.csv', csvData);
+
+      const response = await fetch('matchmaking.py');
+      const scriptContent = await response.text();
+
+      try {
+        pyodide.runPython(scriptContent);
+      } catch (error) {
+        throw new Error("Error running the Python script: " + error);
+      }
+
+      const processedCSV = pyodide.FS.readFile('output.csv', { encoding: 'utf8' });
+      return processedCSV;
+    }
+
+    document.getElementById('processButton').addEventListener('click', async function() {
+      const fileInput = document.getElementById('csvInput');
+      if (fileInput.files.length === 0) {
+        alert('Please select a CSV file.');
+        return;
+      }
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const csvData = e.target.result;
+        try {
+          const processedCSV = await runMatchmaking(csvData);
+          const blob = new Blob([processedCSV], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const downloadLink = document.getElementById('downloadLink');
+          downloadLink.href = url;
+          downloadLink.download = 'processed.csv';
+          downloadLink.style.display = 'inline';
+          downloadLink.textContent = 'Download Processed CSV';
+        } catch (error) {
+          alert('An error occurred: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+  </script>
+</body>
+</html>

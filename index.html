@@ -22,6 +22,7 @@
       await pyodide.loadPackage("pandas");
       await pyodide.loadPackage("numpy");
       await pyodide.loadPackage("scipy");
+      await pyodide.loadPackage("scikit-learn");
       pyodide.FS.writeFile('synthetic_student_availability_open_ended.csv', csvData);
 
       const response = await fetch('matchmaking.py');

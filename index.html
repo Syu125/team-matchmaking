@@ -22,7 +22,7 @@
       await pyodide.loadPackage("pandas");
       await pyodide.loadPackage("numpy");
       await pyodide.loadPackage("scipy");
-      pyodide.FS.writeFile('input.csv', csvData);
+      pyodide.FS.writeFile('synthetic_student_availability_open_ended.csv', csvData);
 
       const response = await fetch('matchmaking.py');
       const scriptContent = await response.text();
@@ -33,7 +33,7 @@
         throw new Error("Error running the Python script: " + error);
       }
 
-      const processedCSV = pyodide.FS.readFile('output.csv', { encoding: 'utf8' });
+      const processedCSV = pyodide.FS.readFile('student_group_assignments_v3.csv', { encoding: 'utf8' });
       return processedCSV;
     }
 

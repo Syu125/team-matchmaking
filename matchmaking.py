@@ -7,6 +7,8 @@ def preprocess_data(file_path):
     df['ID'] = range(1, len(df) + 1)  # Anonymize students with IDs
     return df
 
+#TODO: add ngram to encode the data that is read in
+
 def encode_answers(df):
     text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 'Team Role Preference',
                                     'Team Experience', 'Communication Method', 'Class Goals', 'Strengths', 'Weaknesses'] if col in df.columns]

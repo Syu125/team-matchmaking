@@ -10,7 +10,7 @@ def preprocess_data(file_path):
 #TODO: add ngram to encode the data that is read in
 
 def encode_answers(df):
-    text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 'Team Role Preference',
+    """text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 'Team Role Preference',
                                     'Team Experience', 'Communication Method', 'Class Goals', 'Strengths', 'Weaknesses'] if col in df.columns]
     
     if not text_columns:
@@ -35,7 +35,44 @@ def encode_answers(df):
     for i, vec in enumerate(encoded_texts):
         encoded_matrix[i, :len(vec)] = vec[:max_length]
     
-    return encoded_matrix
+    return encoded_matrix"""
+
+    #change to encode by column
+    text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 
+                                    'Team Role Preference', 'Team Experience', 'Communication Method', 
+                                    'Class Goals', 'Strengths', 'Weaknesses'] if col in df.columns]
+    
+    if not text_columns:
+        raise KeyError("None of the expected text columns are present in the dataset.")
+
+    encoded_matrices = []
+    
+    for col in text_columns:
+        word_to_index = {}
+        encoded_texts = []
+        
+        for text in df[col].astype(str):
+            encoded_vector = []
+            words = text.split()
+            for word in words:
+                if word not in word_to_index:
+                    word_to_index[word] = len(word_to_index) + 1  # Assign unique index
+                encoded_vector.append(word_to_index[word])
+            encoded_texts.append(encoded_vector)
+        
+        # Pad/truncate vectors to a fixed length
+        max_length = max(len(vec) for vec in encoded_texts)
+        encoded_matrix = np.zeros((len(encoded_texts), max_length))
+        
+        for i, vec in enumerate(encoded_texts):
+            encoded_matrix[i, :len(vec)] = vec[:max_length]
+        
+        encoded_matrices.append(encoded_matrix)  # Store encoding for this column
+    
+    # Merge all encoded column matrices into one final feature matrix
+    final_feature_matrix = np.hstack(encoded_matrices)  # Horizontally stack them
+
+    return final_feature_matrix
 
 def cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4):
     num_clusters = len(df) // min_group_size  # Ensure enough clusters for min size
@@ -90,4 +127,4 @@ file_path = 'synthetic_student_availability_open_ended.csv'
 df = preprocess_data(file_path)
 feature_matrix = encode_answers(df)
 df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)
-generate_report(df, 'student_group_assignments_v3.csv')
+generate_report(df, 'student_group_assignments_v5.csv')

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import cdist
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 def preprocess_data(file_path):
     df = pd.read_csv(file_path)
@@ -9,33 +10,50 @@ def preprocess_data(file_path):
 
 #TODO: add ngram to encode the data that is read in
 
-def encode_answers(df):
-    """text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 'Team Role Preference',
-                                    'Team Experience', 'Communication Method', 'Class Goals', 'Strengths', 'Weaknesses'] if col in df.columns]
+def generate_ngrams(text, n=3):
+    # Handle potential NaN values and convert to string
+    if pd.isna(text):
+        return ""
+    # Convert to string and split into words
+    words = str(text).split()
+    # If there are fewer words than n, return the text as is
+    if len(words) < n:
+        return " ".join(words)
+    # Generate n-grams manually
+    ngrams_list = []
+    for i in range(len(words) - n + 1):
+        ngram = " ".join(words[i:i + n])
+        ngrams_list.append(ngram)
+    return " ".join(ngrams_list)
+
+def create_feature_matrix(df, n=3):
+    # Combine all text columns into a single string per student for vectorization
+    text_data = []
+    for idx, row in df.iterrows():
+        combined_text = ""
+        for column in df.columns:
+            if column != 'ID':
+                # Generate n-grams for each cell and combine
+                ngrams_text = generate_ngrams(row[column], n)
+                combined_text += ngrams_text + " "
+        text_data.append(combined_text.strip())
     
-    if not text_columns:
-        raise KeyError("None of the expected text columns are present in the dataset.")
+    # Use TF-IDF Vectorizer to create a numerical feature matrix
+    vectorizer = TfidfVectorizer()
+    feature_matrix = vectorizer.fit_transform(text_data).toarray()
     
-    # Create a basic numerical encoding for text responses
-    word_to_index = {}
-    encoded_texts = []
-    
-    for text in df[text_columns].astype(str).agg(' '.join, axis=1):
-        encoded_vector = []
-        words = text.split()
-        for word in words:
-            if word not in word_to_index:
-                word_to_index[word] = len(word_to_index) + 1  # Assign unique index
-            encoded_vector.append(word_to_index[word])
-        encoded_texts.append(encoded_vector)
-    
-    # Pad/truncate vectors to a fixed length
-    max_length = max(len(vec) for vec in encoded_texts)
-    encoded_matrix = np.zeros((len(encoded_texts), max_length))
-    for i, vec in enumerate(encoded_texts):
-        encoded_matrix[i, :len(vec)] = vec[:max_length]
-    
-    return encoded_matrix"""
+    return feature_matrix, text_data
+
+def encode_with_ngrams(df, n=3):
+    ngram_df = pd.DataFrame()
+    ngram_df['ID'] = df['ID']
+    for column in df.columns:
+        if column != 'ID':
+            ngram_df[f'{column}_ngrams'] = df[column].apply(lambda x: generate_ngrams(x, n))
+    return ngram_df
+
+
+def encode_answers(df, n = 3):
 
     #change to encode by column
     text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 
@@ -68,7 +86,6 @@ def encode_answers(df):
             encoded_matrix[i, :len(vec)] = vec[:max_length]
         
         encoded_matrices.append(encoded_matrix)  # Store encoding for this column
-    
     # Merge all encoded column matrices into one final feature matrix
     final_feature_matrix = np.hstack(encoded_matrices)  # Horizontally stack them
 
@@ -125,6 +142,8 @@ def generate_report(df, output_path):
 # Main Execution
 file_path = 'synthetic_student_availability_open_ended.csv'
 df = preprocess_data(file_path)
-feature_matrix = encode_answers(df)
-df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)
-generate_report(df, 'student_group_assignments_v5.csv')
+#feature_matrix = encode_answers(df, 3)
+feature_matrix, text_data = create_feature_matrix(df, n=3)  # Generate numerical feature matrix with trigrams
+df_clustered = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)
+generate_report(df_clustered, 'student_group_assignments_v6.csv')
+

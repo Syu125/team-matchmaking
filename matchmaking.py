@@ -1,6 +1,13 @@
 import pandas as pd
 import numpy as np
-from scipy.spatial.distance import cdist
+from gensim.models import Word2Vec
+from sklearn.cluster import KMeans
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import nltk
+
+nltk.download('punkt_tab')
+nltk.download('stopwords')
 
 def preprocess_data(file_path):
     df = pd.read_csv(file_path)
@@ -14,47 +21,27 @@ def encode_answers(df):
     if not text_columns:
         raise KeyError("None of the expected text columns are present in the dataset.")
     
-    # Create a basic numerical encoding for text responses
-    word_to_index = {}
-    encoded_texts = []
+    # Combine text columns into a single string per student
+    # Can skip this and just do it on specific sections 
+    df['Combined_Text'] = df[text_columns].astype(str).agg(' '.join, axis=1)
     
-    for text in df[text_columns].astype(str).agg(' '.join, axis=1):
-        encoded_vector = []
-        words = text.split()
-        for word in words:
-            if word not in word_to_index:
-                word_to_index[word] = len(word_to_index) + 1  # Assign unique index
-            encoded_vector.append(word_to_index[word])
-        encoded_texts.append(encoded_vector)
+    stop_words = set(stopwords.words('english'))
+    df['Tokenized_Text'] = df['Combined_Text'].apply(lambda x: [word.lower() for word in word_tokenize(x) if word.isalnum() and word.lower() not in stop_words])
     
-    # Pad/truncate vectors to a fixed length
-    max_length = max(len(vec) for vec in encoded_texts)
-    encoded_matrix = np.zeros((len(encoded_texts), max_length))
-    for i, vec in enumerate(encoded_texts):
-        encoded_matrix[i, :len(vec)] = vec[:max_length]
+    model = Word2Vec(df['Tokenized_Text'], vector_size=100, window=5, min_count=1, workers=4)
     
-    return encoded_matrix
+    def vectorize_text(tokens):
+        vectors = [model.wv[word] for word in tokens if word in model.wv]
+        return np.mean(vectors, axis=0) if vectors else np.zeros(100)  # Use zero vector if no words found
+    
+    feature_matrix = np.vstack(df['Tokenized_Text'].apply(vectorize_text))
+    return feature_matrix
 
 def cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4):
     num_clusters = len(df) // min_group_size  # Ensure enough clusters for min size
     
-    # Apply K-Means clustering
-    from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
     df['Cluster'] = kmeans.fit_predict(feature_matrix)
-    
-    # Ensure students with similar weaknesses are not grouped together
-    df['Weaknesses'] = df['Weaknesses'].astype(str)
-    unique_weaknesses = df['Weaknesses'].unique()
-    
-    for weakness in unique_weaknesses:
-        students_with_weakness = df[df['Weaknesses'] == weakness]
-        if len(students_with_weakness) > 1:
-            clusters_assigned = students_with_weakness['Cluster'].unique()
-            if len(clusters_assigned) == 1:
-                # Reassign students with the same weakness to different clusters
-                for idx, student in enumerate(students_with_weakness.index):
-                    df.at[student, 'Cluster'] = (df.at[student, 'Cluster'] + idx) % num_clusters
     
     # Ensure groups have a min of 3 and max of 4 students
     clustered_students = df.groupby('Cluster').apply(lambda x: x.sample(frac=1)).reset_index(drop=True)
@@ -88,4 +75,4 @@ file_path = 'synthetic_student_availability_open_ended.csv'
 df = preprocess_data(file_path)
 feature_matrix = encode_answers(df)
 df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)
-generate_report(df, 'student_group_assignments_v3.csv')
+generate_report(df, 'student_group_assignments_word2vec.csv')

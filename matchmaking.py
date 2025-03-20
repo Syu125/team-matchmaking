@@ -5,10 +5,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import torch
 import nltk
 from sklearn.preprocessing import normalize
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, SpectralClustering
 from gensim.models import Word2Vec
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from scipy.spatial.distance import pdist, squareform, cosine
 
 nltk.download('punkt_tab')
 nltk.download('stopwords')
@@ -16,7 +17,9 @@ nltk.download('stopwords')
 def preprocess_data(file_path):
     df = pd.read_csv(file_path)
     df['ID'] = range(1, len(df) + 1)  # Anonymize students with IDs
-    return df
+    cols = list(df.columns)
+    cols = cols[-1:] + cols[:-1] # make weaknesses the last column
+    return df[cols]
 
 def bge_encode(df):
     text_columns = [col for col in ['Work Preference', 'Assignment Start Time', 'Time Commitment', 'Team Role Preference',
@@ -64,9 +67,10 @@ def create_feature_matrix(df, n=3):
     vectorizer = TfidfVectorizer()
     feature_matrix = vectorizer.fit_transform(text_data).toarray()
     
-    return feature_matrix, text_data
+    return feature_matrix
 
-def sbert_encode(model, df):
+def sbert_encode(df):
+    model = SentenceTransformer("all-MiniLM-L6-v2")
     student_embeddings = []
     for _, row in df.iterrows():
         response_embeddings = (model.encode(row, convert_to_tensor=True))
@@ -137,9 +141,52 @@ def cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4):
         new_clusters.extend(temp_group)
     else:
         for i in range(len(temp_group)):
-            new_clusters[i % cluster_counter].append(temp_group[i])
+            new_clusters.append((i % cluster_counter, temp_group[i][1]))
     
-    df_clustered = pd.DataFrame(new_clusters, columns=['Cluster', 'Name'])
+    df_clustered = pd.DataFrame(new_clusters, columns=['Cluster', 'Name']).sort_values(by='Cluster')
+    return df_clustered
+
+def custom_distance(vec1, vec2, weak_weight=1.0):
+    # approx last 1/18th are weaknesses
+    size = len(vec1) // 18
+    base_sim = cosine(vec1[:-size], vec2[:-size]) # 0 if same, 1 if different
+    weak_sim = 1 - cosine(vec1[-size:], vec2[-size:]) # 1 if same, 0 if different
+    if np.isnan(weak_sim):
+        weak_sim = 0
+
+    sim = (base_sim + (weak_weight * weak_sim)) / 2.0
+    return 1 - sim
+
+def cluster_students_2(df, feature_matrix, min_group_size=3, max_group_size=4):
+    num_clusters = len(df) // min_group_size  # Ensure enough clusters for min size
+
+    distance_matrix = squareform(pdist(feature_matrix, metric=custom_distance))
+    
+    # Apply Spectral clustering
+    cluster = SpectralClustering(n_clusters=num_clusters, random_state=42, n_init=10)
+    df['Cluster'] = cluster.fit_predict(distance_matrix)
+    
+    # Ensure groups have a min of 3 and max of 4 students
+    clustered_students = df.groupby('Cluster').apply(lambda x: x.sample(frac=1)).reset_index(drop=True)
+    new_clusters = []
+    cluster_counter = 0
+    temp_group = []
+    
+    for _, row in clustered_students.iterrows():
+        temp_group.append((cluster_counter, row['Name']))
+        if len(temp_group) == max_group_size:
+            new_clusters.extend(temp_group)
+            temp_group = []
+            cluster_counter += 1
+    
+    # If any remaining students, distribute them to ensure min size of 3
+    if len(temp_group) >= min_group_size:
+        new_clusters.extend(temp_group)
+    else:
+        for i in range(len(temp_group)):
+            new_clusters.append((i % cluster_counter, temp_group[i][1]))
+    
+    df_clustered = pd.DataFrame(new_clusters, columns=['Cluster', 'Name']).sort_values(by='Cluster')
     return df_clustered
 
 def generate_report(df, output_path):

@@ -26,7 +26,7 @@ def encode_answers_sbert(model, df):
     return feature_matrix.cpu()  # (num_students, embedding_size * num_questions)
 
 
-def custom_distance(vec1, vec2, weak_weight=0.5):
+def custom_distance(vec1, vec2, weak_weight=0.9):
     # last 384 are weaknesses
     base_sim = cosine(vec1[:-384], vec2[:-384]) # 0 if same, 1 if different
     weak_sim = 1 - cosine(vec1[-384:], vec2[-384:]) # 1 if same, 0 if different
@@ -90,7 +90,7 @@ def generate_report(df, output_path):
 seed=42
 torch.manual_seed(seed)
 model = SentenceTransformer("all-MiniLM-L6-v2")
-file_path = 'synthetic_student_availability_open_ended.csv'
+file_path = 'Generated-Responses.csv'
 df = preprocess_data(file_path)
 feature_matrix = encode_answers_sbert(model, df)
 df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)

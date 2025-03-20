@@ -85,6 +85,8 @@ def word2vec_encode(df):
     if not text_columns:
         raise KeyError("None of the expected text columns are present in the dataset.")
     
+    df = df.copy()
+
     # Combine text columns into a single string per student
     df['Combined_Text'] = df[text_columns].astype(str).agg(' '.join, axis=1)
     

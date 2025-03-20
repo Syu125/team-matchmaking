@@ -10,6 +10,7 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from sentence_transformers import SentenceTransformer
 from itertools import combinations
+import pandas as pd
 
 def evaluate_cosine_similarity(feature_matrix, df):
     similarity_matrix = cosine_similarity(feature_matrix)
@@ -79,6 +80,7 @@ for file, path in enumerate(file_path):
     df = preprocess_data(path)
 
     encoding_models = {
+        "Random":None,
         "BGE":bge_encode, 
         "N-Grams":create_feature_matrix, 
         "SBERT":sbert_encode, 
@@ -93,6 +95,18 @@ for file, path in enumerate(file_path):
 
     for name, model in encoding_models.items():
         print(f'{name} Evaluations:')
+        if name == "Random":
+            clusters_df = pd.DataFrame(df['Name'].copy())
+            clusters_df = clusters_df.sample(frac=1).reset_index(drop=True)
+            clusters_df.insert(0, 'Cluster', clusters_df.index % (len(df)//5))
+            clusters_df.sort_values(by='Cluster', inplace=True)
+            feature_matrix = bge_encode(input_df)
+            cosine_scores.append(evaluate_cosine_similarity(feature_matrix, clusters_df))
+            cosine_scores_2.append(evaluate_cosine_similarity(feature_matrix, clusters_df))
+            jaccard_scores.append(evaluate_jaccard_similarity(clusters_df, df, 'Weaknesses'))
+            jaccard_scores_2.append(evaluate_jaccard_similarity(clusters_df, df, 'Weaknesses'))
+            continue
+                
         feature_matrix = model(input_df)
         clusters_df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=5)
         cosine_scores.append(evaluate_cosine_similarity(feature_matrix, clusters_df))

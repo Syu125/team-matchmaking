@@ -201,3 +201,9 @@ def generate_report(df, output_path):
 # feature_matrix = encode_answers(df)
 # df = cluster_students(df, feature_matrix, min_group_size=3, max_group_size=4)
 # generate_report(df, 'student_group_assignments_v3.csv')
+
+file_path = 'synthetic_student_availability_open_ended.csv'
+df = preprocess_data(file_path)
+word2vec_feature_matrix = word2vec_encode(df)
+word2vec_df = cluster_students(df, word2vec_feature_matrix, min_group_size=3, max_group_size=4)
+generate_report(word2vec_df, 'student_group_assignments_v3.csv')
